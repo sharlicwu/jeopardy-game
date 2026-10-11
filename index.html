@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Jeopardy Word Competition</title>
+
+<style>
+  :root{
+    --red:#d32f2f; --red-dark:#b71c1c; --red-light:#ff5252;
+    --blue:#1976d2; --blue-dark:#0d47a1; --blue-light:#42a5f5;
+    --gold:#ffd600; --gold-dark:#f9a825;
+    --bg:#0b1c30; --panel:#102842; --cell:#123a63;
+    --green:#2e7d32; --amber:#e65100;
+  }
+  *{box-sizing:border-box; margin:0; padding:0; -webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:"Microsoft JhengHei","PingFang TC","Noto Sans TC",sans-serif;
+    background:var(--bg); color:#fff; min-height:100vh;
+    display:flex; flex-direction:column; align-items:center;
+    padding:10px; overflow-x:hidden;
+  }
+  .hidden{display:none !important;}
+  button{
+    font-family:inherit; cursor:pointer; border:none; color:#fff;
+    min-width:44px; min-height:44px;
+  }
+  .title{
+    font-size:clamp(1.4rem,4.5vw,2.4rem); font-weight:900; color:var(--gold);
+    letter-spacing:2px; text-align:center; margin:6px 0 10px;
+    text-shadow:0 3px 0 #000;
+  }
+
+  /* ---------- 記分板 ---------- */
+  .score-wrap{width:100%; max-width:1100px; display:flex; flex-direction:column; gap:8px;}
+  .teams{display:flex; gap:10px;}
+  .team{
+    flex:1; border-radius:16px; padding:8px 10px 12px; text-align:center;
+    background:#1b2b3d; border:5px solid #3c5064; transition:.2s;
+  }
+  .team .name{font-size:clamp(1.1rem,3.5vw,1.7rem); font-weight:900; letter-spacing:2px;}
+  .team .score{font-size:clamp(2rem,7vw,3.4rem); font-weight:900; line-height:1.1;
+    font-variant-numeric:tabular-nums;}
+  .team .flag{
+    display:inline-block; margin-top:4px; font-size:clamp(.85rem,2.5vw,1.1rem);
+    font-weight:800; padding:3px 12px; border-radius:999px; background:#33465c; color:#cfd8e3;
+  }
+  .team.red{border-color:var(--red-dark);}
+  .team.red .name{color:#ff8a80;}
+  .team.red .score{color:#fff;}
+  .team.blue{border-color:var(--blue-dark);}
+  .team.blue .name{color:#82b1ff;}
+  .team.blue .score{color:#fff;}
+  .team.red.on{border-color:var(--red-light); background:#4a1214;
+    box-shadow:0 0 0 3px #d32f2f66, 0 0 26px #d32f2faa; transform:scale(1.02);}
+  .team.blue.on{border-color:var(--blue-light); background:#0b2a4d;
+    box-shadow:0 0 0 3px #1976d266, 0 0 26px #1976d2aa; transform:scale(1.02);}
+  .team.on .flag{background:var(--gold); color:#111;}
+  .turn{
+    text-align:center; font-size:clamp(1rem,3.2vw,1.5rem); font-weight:900;
+    padding:8px 12px; border-radius:10px; letter-spacing:2px;
+    background:var(--red); color:#fff; border:3px solid #fff3;
+  }
+  .turn.blue{background:var(--blue);}
+  .left{text-align:center; font-size:clamp(.85rem,2.5vw,1.05rem); color:#9fb6cd; font-weight:700;}
+
+  /* ---------- 題板 ---------- */
+  .board{
+    width:100%; max-width:1100px; margin-top:12px;
+    display:grid; grid-template-columns:1fr 1fr; gap:10px;
+  }
+  .cat{
+    background:#08192c; border:3px solid var(--gold-dark); border-radius:12px;
+    color:var(--gold); font-weight:900; text-align:center;
+    font-size:clamp(1.05rem,3.5vw,1.7rem); padding:12px 6px; letter-spacing:2px;
+  }
+  .cell{
+    background:linear-gradient(180deg,#164a7d,#0e2f52);
+    border:3px solid #2b6cb0; border-radius:12px;
+    color:var(--gold); font-weight:900;
+    font-size:clamp(1.5rem,5vw,2.5rem); text-shadow:0 2px 0 #000;
+    min-height:74px; transition:.15s;
+  }
+  .cell:hover:not(:disabled){background:linear-gradient(180deg,#1e63a3,#14406e); border-color:var(--gold);}
+  .cell:active:not(:disabled){transform:scale(.97);}
+  .cell:disabled{opacity:.32; color:#8fa6bd; border-color:#33465c; background:#152536; text-decoration:line-through;}
+
+  /* ---------- 疊層（開始/題目/結算） ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(3,10,20,.94);
+    display:flex; align-items:center; justify-content:center; padding:14px; z-index:50;
+    overflow-y:auto;
+  }
+  .box{
+    width:100%; max-width:920px; background:var(--panel);
+    border:5px solid var(--gold); border-radius:20px; padding:18px;
+    text-align:center; box-shadow:0 10px 40px #000c;
+  }
+  .mteam{
+    display:inline-block; font-size:clamp(1rem,3vw,1.4rem); font-weight:900;
+    padding:6px 18px; border-radius:999px; background:var(--red); letter-spacing:2px;
+    margin-bottom:8px;
+  }
+  .mteam.blue{background:var(--blue);}
+  .mmeta{font-size:clamp(.95rem,2.8vw,1.25rem); font-weight:800; color:var(--gold); margin-bottom:6px;}
+  .mprompt{
+    font-size:clamp(1.7rem,6vw,3.2rem); font-weight:900; line-height:1.3;
+    background:#08192c; border:3px solid #2b6cb0; border-radius:14px;
+    padding:18px 12px; margin-bottom:14px; word-break:break-word;
+  }
+  .mopts{display:grid; grid-template-columns:1fr 1fr; gap:12px;}
+  .opt{
+    background:#1c4b7a; border:4px solid #3d7eb8; border-radius:14px;
+    font-size:clamp(1.05rem,3.4vw,1.7rem); font-weight:800; line-height:1.35;
+    padding:14px 10px; min-height:76px; transition:.15s; word-break:break-word;
+  }
+  .opt:hover:not(:disabled){background:#2563a0; border-color:var(--gold);}
+  .opt:active:not(:disabled){transform:scale(.98);}
+  .opt:disabled{cursor:default;}
+  .opt.ok{background:var(--green); border-color:#66bb6a;}
+  .opt.bad{background:var(--amber); border-color:#ff9800; opacity:.75;}
+  .mfb{
+    margin-top:14px; font-size:clamp(1.2rem,4vw,2rem); font-weight:900;
+    padding:12px; border-radius:12px; background:#08192c; border:3px solid #33465c;
+  }
+  .mfb.good{border-color:#66bb6a; color:#a5d6a7;}
+  .mfb.bad{border-color:#ff9800; color:#ffcc80;}
+  .btn{
+    display:inline-block; margin-top:14px; padding:14px 40px; min-height:56px;
+    font-size:clamp(1.1rem,3.5vw,1.6rem); font-weight:900; letter-spacing:3px;
+    border-radius:12px; background:var(--gold); color:#111;
+    border:3px solid #fff8; box-shadow:0 5px 0 #a37f00;
+  }
+  .btn:active{transform:translateY(4px); box-shadow:0 1px 0 #a37f00;}
+  .btn.red{background:var(--red); color:#fff; box-shadow:0 5px 0 var(--red-dark); border-color:#fff5;}
+  .btn.red:active{box-shadow:0 1px 0 var(--red-dark);}
+  .btn.blue{background:var(--blue); color:#fff; box-shadow:0 5px 0 var(--blue-dark); border-color:#fff5;}
+  .btn.blue:active{box-shadow:0 1px 0 var(--blue-dark);}
+  .btn.ghost{background:#24405c; color:#fff; box-shadow:0 5px 0 #12293f;}
+
+  /* ---------- 開始畫面 ---------- */
+  .start h1{font-size:clamp(1.8rem,7vw,3.4rem); color:var(--gold); font-weight:900; margin-bottom:8px;}
+  .start p{font-size:clamp(1rem,3vw,1.3rem); color:#c6d6e6; line-height:1.8; margin-bottom:6px;}
+  .vs{display:flex; gap:12px; justify-content:center; margin:14px 0;}
+  .vs div{flex:1; max-width:240px; padding:14px 6px; border-radius:14px; font-weight:900;
+    font-size:clamp(1.2rem,4vw,1.8rem); border:4px solid #fff2;}
+  .vs .r{background:var(--red-dark); border-color:var(--red-light);}
+  .vs .b{background:var(--blue-dark); border-color:var(--blue-light);}
+
+  /* ---------- 結算 ---------- */
+  .final{font-size:clamp(2rem,8vw,4rem); font-weight:900; color:var(--gold); margin:8px 0 14px;}
+  .fteams{display:flex; gap:12px; margin-bottom:10px;}
+  .fteams div{flex:1; padding:16px 6px; border-radius:14px; font-weight:900; border:5px solid #fff2;}
+  .fteams .n{font-size:clamp(1rem,3vw,1.4rem);}
+  .fteams .s{font-size:clamp(2.2rem,8vw,3.6rem); font-variant-numeric:tabular-nums;}
+  .fteams .r{background:var(--red-dark); border-color:var(--red-light);}
+  .fteams .b{background:var(--blue-dark); border-color:var(--blue-light);}
+  .fteams .win{box-shadow:0 0 0 4px var(--gold), 0 0 30px var(--gold);}
+
+  @media (max-width:560px){
+    .mopts{grid-template-columns:1fr;}
+    .opt{min-height:64px;}
+    .cell{min-height:64px;}
+  }
+</style>
+</head>
+<body>
+
+<div class="title">JEOPARDY WORD COMPETITION</div>
+
+<div class="score-wrap">
+  <div class="teams">
+    <div class="team red on" id="team0">
+      <div class="name">RED TEAM</div>
+      <div class="score" id="score0">0</div>
+      <div class="flag" id="flag0">MAKE ANSWER</div>
+    </div>
+    <div class="team blue" id="team1">
+      <div class="name">BLUE TEAM</div>
+      <div class="score" id="score1">0</div>
+      <div class="flag" id="flag1">WAITING</div>
+    </div>
+  </div>
+  <div class="turn" id="turnBar">CURRENT TURN: RED TEAM</div>
+  <div class="left" id="leftBar">10 QUESTIONS REMAINING</div>
+</div>
+
+<div class="board" id="board"></div>
+
+<!-- 開始畫面 -->
+<div class="overlay" id="startScreen">
+  <div class="box start">
+    <h1>JEOPARDY</h1>
+    <p>Word Competition – Two teams compete – Answer correctly to score</p>
+    <div class="vs">
+      <div class="r">RED TEAM</div>
+      <div class="b">BLUE TEAM</div>
+    </div>
+    <p>Click a question – Answer – Correct adds points, wrong passes to other team</p>
+    <button class="btn" id="startBtn">START</button>
+  </div>
+</div>
+
+<!-- 題目畫面 -->
+<div class="overlay hidden" id="qScreen">
+  <div class="box">
+    <div class="mteam" id="mTeam">RED TEAM'S TURN</div>
+    <div class="mmeta" id="mMeta">ENGLISH SELECT CHINESE 100 PTS</div>
+    <div class="mprompt" id="mPrompt"></div>
+    <div class="mopts" id="mOpts"></div>
+    <div class="mfb hidden" id="mFb"></div>
+    <button class="btn hidden" id="mNext">CONTINUE</button>
+  </div>
+</div>
+
+<!-- 結算畫面 -->
+<div class="overlay hidden" id="endScreen">
+  <div class="box">
+    <div class="final" id="finalText">RED TEAM WINS</div>
+    <div class="fteams">
+      <div class="r" id="fTeam0"><div class="n">RED TEAM</div><div class="s" id="fScore0">0</div></div>
+      <div class="b" id="fTeam1"><div class="n">BLUE TEAM</div><div class="s" id="fScore1">0</div></div>
+    </div>
+    <button class="btn" id="againBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script>
+/* =========================================================
+   單字資料（之後換單元：只改這段 WORDS 即可）
+   格式：{ en: "英文", zh: "中文" }  共 10 個
+   前 5 個 = 100~500 分，後 5 個 = 100~500 分
+   ========================================================= */
+const WORDS = [
+  { en: "hibernation", zh: "冬眠" },
+  { en: "last",        zh: "持續" },
+  { en: "slowly",      zh: "慢慢地" },
+  { en: "heart beat",  zh: "心跳" },
+  { en: "stay alive",  zh: "活下去" },
+  { en: "stays",       zh: "停留" },
+  { en: "safe place",  zh: "安全的地方" },
+  { en: "squirrels",   zh: "松鼠" },
+  { en: "raccoons",    zh: "浣熊" },
+  { en: "skunks",      zh: "臭鼬" }
+];
+/* ======================================================= */
+</script>
+
+<script>
+/* ================= 音效（Web Audio API） ================= */
+let actx = null;
+function audio(){
+  if(!actx){ try{ actx = new (window.AudioContext || window.webkitAudioContext)(); }catch(e){ return null; } }
+  if(actx.state === 'suspended') actx.resume();
+  return actx;
+}
+function tone(freq, at, dur, type, vol){
+  const c = audio(); if(!c) return;
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, c.currentTime + at);
+  g.gain.exponentialRampToValueAtTime(vol, c.currentTime + at + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + at + dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(c.currentTime + at); o.stop(c.currentTime + at + dur + 0.05);
+}
+function sndCorrect(){
+  [523.25, 659.25, 783.99, 1046.50].forEach((f,i)=> tone(f, i*0.11, 0.20, 'triangle', 0.30));
+  tone(1318.5, 0.44, 0.35, 'triangle', 0.25);
+}
+function sndWrong(){
+  tone(196, 0, 0.30, 'sawtooth', 0.20);
+  tone(147, 0.16, 0.40, 'sawtooth', 0.20);
+}
+function sndClick(){ tone(880, 0, 0.07, 'square', 0.10); }
+function sndWin(){
+  [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50, 1318.5].forEach((f,i)=> tone(f, i*0.14, 0.28, 'triangle', 0.28));
+}
+
+/* ================= 遊戲邏輯 ================= */
+const CATS = [
+  { title: 'ENGLISH SELECT CHINESE', dir: 'en2zh' },
+  { title: 'CHINESE SELECT ENGLISH', dir: 'zh2en' }
+];
+const LEVELS = [100, 200, 300, 400, 500];
+
+function shuffle(a){
+  a = a.slice();
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function buildQuestions(){
+  const q = [];
+  CATS.forEach((cat, ci)=>{
+    q[ci] = WORDS.map((w, wi)=>{
+      const others = shuffle(WORDS.filter((_, i)=> i !== wi)).slice(0, 3);
+      const pool = shuffle(
+        [{ t: cat.dir === 'en2zh' ? w.zh : w.en, ok: true }]
+          .concat(others.map(o=> ({ t: cat.dir === 'en2zh' ? o.zh : o.en, ok: false })))
+      );
+      return {
+        cat: ci, li: wi, points: LEVELS[wi],
+        prompt: cat.dir === 'en2zh' ? w.en : w.zh,
+        opts: pool.map(p=> p.t),
+        ans: pool.findIndex(p=> p.ok)
+      };
+    });
+  });
+  return q;
+}
+
+const TEAMS = [
+  { name: 'RED TEAM', cls: 'red' },
+  { name: 'BLUE TEAM', cls: 'blue' }
+];
+let S = null;
+
+function newGame(){
+  S = {
+    q: buildQuestions(),
+    score: [0, 0],
+    turn: 0,
+    used: 0,
+    done: [],
+    cur: null,
+    starter: 0,
+    answering: 0,
+    locked: false,
+    wrong: []
+  };
+  document.getElementById('endScreen').classList.add('hidden');
+  document.getElementById('qScreen').classList.add('hidden');
+  renderBoard(); renderScore();
+}
+function other(i){ return 1 - i; }
+function teamName(i){ return TEAMS[i].name; }
+
+/* ================= 畫面：記分板 ================= */
+function renderScore(){
+  for(let i = 0; i < 2; i++){
+    document.getElementById('score' + i).textContent = S.score[i];
+    const t = document.getElementById('team' + i);
+    const on = (S.turn === i);
+    t.classList.toggle('on', on);
+    document.getElementById('flag' + i).textContent = on ? 'MAKE ANSWER' : 'WAITING';
+  }
+  const bar = document.getElementById('turnBar');
+  bar.textContent = 'CURRENT TURN: ' + teamName(S.turn);
+  bar.classList.toggle('blue', S.turn === 1);
+  const left = 10 - S.used;
+  document.getElementById('leftBar').textContent = (left > 0) ? (left + ' QUESTIONS REMAINING') : 'QUESTIONS USED UP';
+}
+
+/* ================= 畫面：題板 ================= */
+function renderBoard(){
+  const b = document.getElementById('board');
+  b.innerHTML = '';
+  CATS.forEach(c=>{
+    const h = document.createElement('div');
+    h.className = 'cat'; h.textContent = c.title;
+    b.appendChild(h);
+  });
+  LEVELS.forEach((lv, li)=>{
+    CATS.forEach((c, ci)=>{
+      const btn = document.createElement('button');
+      btn.className = 'cell';
+      const key = ci + '-' + li;
+      if(S.done.indexOf(key) >= 0){
+        btn.disabled = true;
+        btn.textContent = '✓';
+      }else{
+        btn.textContent = lv;
+        btn.setAttribute('aria-label', c.title + ' ' + lv + ' PTS');
+        btn.onclick = ()=> openQuestion(ci, li);
+      }
+      b.appendChild(btn);
+    });
+  });
+}
+
+/* ================= 出題 ================= */
+function openQuestion(ci, li){
+  const key = ci + '-' + li;
+  if(S.done.indexOf(key) >= 0) return;
+  sndClick();
+  S.cur = S.q[ci][li];
+  S.starter = S.turn;
+  S.answering = S.turn;
+  S.locked = false;
+  S.wrong = [];
+
+  document.getElementById('mMeta').textContent =
+    CATS[ci].title + '　' + S.cur.points + ' PTS';
+  document.getElementById('mPrompt').textContent = S.cur.prompt;
+  document.getElementById('mFb').classList.add('hidden');
+  document.getElementById('mNext').classList.add('hidden');
+  renderOptions();
+  speakPrompt();
+  document.getElementById('qScreen').classList.remove('hidden');
+}
+function renderOptions(){
+  const box = document.getElementById('mOpts');
+  box.innerHTML = '';
+  S.cur.opts.forEach((txt, i)=>{
+    const b = document.createElement('button');
+    b.className = 'opt';
+    b.textContent = txt;
+    if(S.wrong.indexOf(i) >= 0){
+      b.classList.add('bad'); b.disabled = true;
+    }
+    b.onclick = ()=> pick(i, b);
+    box.appendChild(b);
+  });
+}
+function pick(i, btn){
+  if(S.locked) return;
+  const q = S.cur;
+  if(i === q.ans){
+    S.locked = true;
+    S.score[S.answering] += q.points;
+    btn.classList.add('ok');
+    disableAll();
+    sndCorrect();
+    showFb('CORRECT! +' + q.points, 'good');
+    renderScore();
+  }else{
+    S.wrong.push(i);
+    btn.classList.add('bad');
+    btn.disabled = true;
+    sndWrong();
+    if(S.answering !== S.starter){
+      S.locked = true;
+      disableAll();
+      showFb('ALSO WRONG – QUESTION DONE', 'bad');
+    }else{
+      S.answering = other(S.answering);
+      showFb('WRONG – ' + teamName(S.answering) + ' STEAL', 'bad');
+    }
+    renderAskTeam();
+  }
+}
+function disableAll(){
+  document.querySelectorAll('#mOpts .opt').forEach(b=> b.disabled = true);
+}
+function showFb(text, cls){
+  const fb = document.getElementById('mFb');
+  fb.textContent = text;
+  fb.className = 'mfb ' + cls;
+  document.getElementById('mNext').classList.remove('hidden');
+}
+function nextStep(){
+  const q = S.cur;
+  const key = q.cat + '-' + q.li;
+  sndClick();
+  if(!S.locked){
+    document.getElementById('mFb').classList.add('hidden');
+    document.getElementById('mNext').classList.add('hidden');
+    renderOptions();
+    return;
+  }
+  const wasCorrect = document.getElementById('mFb').classList.contains('good');
+  if(wasCorrect){
+    closeQuestion(key, S.answering);
+  }else{
+    closeQuestion(key, other(S.starter));
+  }
+}
+function closeQuestion(key, nextTurn){
+  if(S.done.indexOf(key) < 0){ S.done.push(key); S.used++; }
+  S.turn = nextTurn;
+  S.cur = null;
+  document.getElementById('qScreen').classList.add('hidden');
+  renderBoard(); renderScore();
+  if(S.used >= 10) endGame();
+}
+
+/* ================= 結算 ================= */
+function endGame(){
+  const a = S.score[0], b = S.score[1];
+  let txt = 'DRAW!';
+  if(a > b){ txt = 'RED TEAM WINS'; document.getElementById('fTeam0').classList.add('win'); document.getElementById('fTeam1').classList.remove('win'); }
+  else if(b > a){ txt = 'BLUE TEAM WINS'; document.getElementById('fTeam1').classList.add('win'); document.getElementById('fTeam0').classList.remove('win'); }
+  else { document.getElementById('fTeam0').classList.remove('win'); document.getElementById('fTeam1').classList.remove('win'); }
+  document.getElementById('finalText').textContent = txt;
+  document.getElementById('fScore0').textContent = a;
+  document.getElementById('fScore1').textContent = b;
+  document.getElementById('endScreen').classList.remove('hidden');
+  sndWin();
+}
+
+/* ================= 英文發音（自動，支援中英文偵測） ================= */
+function speakPrompt(){
+  if(!S || !S.cur) return;
+  const utter = new SpeechSynthesisUtterance(S.cur.prompt);
+  // 自動偵測：若提示文字包含中文（\u4e00-\u9fa5）則目標語言設為中文，否則設為英文
+  if (/[\\u4e00-\\u9fa5]/.test(S.cur.prompt)) {
+    utter.lang = 'zh-TW';
+  } else {
+    utter.lang = 'en-US';
+  }
+  // 從系統取得所有可用語音，並嘗試挑擇最合適的一個
+  function applyVoice(){
+    const voices = window.speechSynthesis.getVoices();
+    if (utter.lang === 'zh-TW') {
+      // 尋找語言碼起始為 'zh' 的聲音（優先普通話）
+      const chVoice = voices.find(v => v.lang && v.lang.startsWith('zh'));
+      if (chVoice) utter.voice = chVoice;
+    } else {
+      // 尋找語言碼起始為 'en' 的聲音
+      const enVoice = voices.find(v => v.lang && v.lang.startsWith('en'));
+      if (enVoice) utter.voice = enVoice;
+    }
+  }
+  // 確保語音庫已載入（有的瀏覽器是延遲載入），若已載入則直接套用，否則每 100ms 檢查一次，載入後套用並停止
+  if (window.speechSynthesis.getVoices().length > 0) {
+    applyVoice();
+  } else {
+    const vt = setInterval(() => {
+      if (window.speechSynthesis.getVoices().length > 0) {
+        clearInterval(vt);
+        applyVoice();
+      }
+    }, 100);
+  }
+  utter.rate = 1;
+  utter.pitch = 1;
+  window.speechSynthesis.speak(utter);
+}
+
+/* ================= 事件 ================= */
+document.getElementById('startBtn').onclick = function(){
+  audio(); sndClick();
+  document.getElementById('startScreen').classList.add('hidden');
+};
+document.getElementById('mNext').onclick = nextStep;
+document.getElementById('againBtn').onclick = function(){
+  sndClick(); newGame();
+};
+
+newGame();
+</script>
+</body>
+</html>
